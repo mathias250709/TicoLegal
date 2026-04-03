@@ -118,6 +118,7 @@ export default function Layout() {
         </AnimatePresence>
       </div>
 
+      {/* Footer (visible en toda la aplicación usando este layout) */}
       <footer className="border-t border-slate-200 bg-white mt-auto">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-slate-600">
           <span className="text-slate-800 font-medium">C.T.P Santa Rosa</span>

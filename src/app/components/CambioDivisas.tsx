@@ -36,7 +36,7 @@ export default function CambioDivisas() {
       setLoading(true);
       // Usando API de exchangerate-api (versión gratuita)
       // Nota: En producción, deberías usar tu propia API key
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/CRC');
+      const response = await fetch('https://open.er-api.com/v6/latest/CRC');
       const data = await response.json();
       
       const rates: ExchangeRate[] = currencies.map(curr => ({
