@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowRightLeft, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface ExchangeRate {
@@ -38,13 +38,28 @@ export default function CambioDivisas() {
       // Nota: En producción, deberías usar tu propia API key
       const response = await fetch('https://open.er-api.com/v6/latest/CRC');
       const data = await response.json();
-      
-      const rates: ExchangeRate[] = currencies.map(curr => ({
-        currency: curr.code,
-        name: curr.name,
-        flag: curr.flag,
-        rate: 1 / data.rates[curr.code], // Convertir de CRC a moneda extranjera
-      }));
+
+      if (data.result !== 'success' || !data.rates) {
+        throw new Error('Respuesta de tasas inválida');
+      }
+
+      // Base CRC: rates[USD] = cuántos USD equivalen a 1 CRC.
+      // Para convertir X unidades de moneda extranjera → CRC: CRC = X / rates[moneda]
+      const rates: ExchangeRate[] = currencies.map((curr) => {
+        const foreignPerCrc = data.rates[curr.code];
+        const fallback =
+          curr.code === 'USD' ? 520 : curr.code === 'EUR' ? 580 : 450;
+        const crcPerUnit =
+          typeof foreignPerCrc === 'number' && foreignPerCrc !== 0
+            ? 1 / foreignPerCrc
+            : fallback;
+        return {
+          currency: curr.code,
+          name: curr.name,
+          flag: curr.flag,
+          rate: crcPerUnit,
+        };
+      });
       
       setExchangeRates(rates);
       setLastUpdate(new Date().toLocaleString('es-CR'));
@@ -64,15 +79,26 @@ export default function CambioDivisas() {
     }
   };
 
-  const getConvertedAmount = (rate: number) => {
-    const numAmount = parseFloat(amount) || 0;
-    return (numAmount * rate).toFixed(2);
+  /** Acepta "10", "10.5" y "10,5" (coma decimal). */
+  const parseAmountInput = (value: string): number => {
+    const normalized = value.trim().replace(',', '.');
+    if (normalized === '' || normalized === '.' || normalized === '-.' || normalized === '-') return 0;
+    const n = Number.parseFloat(normalized);
+    return Number.isFinite(n) ? n : 0;
   };
 
-  const getInverseAmount = (rate: number) => {
-    const numAmount = parseFloat(amount) || 0;
-    return (numAmount / rate).toFixed(2);
-  };
+  const amountForeign = useMemo(() => parseAmountInput(amount), [amount]);
+
+  const selectedRateEntry = useMemo(
+    () => exchangeRates.find((r) => r.currency === selectedCurrency),
+    [exchangeRates, selectedCurrency]
+  );
+
+  /** Cantidad en moneda extranjera → CRC (rate = CRC por 1 unidad extranjera). */
+  const convertedToCrc = useMemo(() => {
+    if (!selectedRateEntry || !Number.isFinite(selectedRateEntry.rate)) return null;
+    return amountForeign * selectedRateEntry.rate;
+  }, [amountForeign, selectedRateEntry]);
 
   return (
     <div className="max-w-6xl mx-auto p-8">
@@ -92,6 +118,9 @@ export default function CambioDivisas() {
             <label className="block text-sm font-medium text-slate-700 mb-2">Cantidad</label>
             <input
               type="number"
+              inputMode="decimal"
+              step="any"
+              min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -117,9 +146,12 @@ export default function CambioDivisas() {
               <div>
                 <p className="text-sm text-slate-600">Equivale a:</p>
                 <p className="text-2xl font-bold text-blue-900">
-                  ₡{exchangeRates.find(r => r.currency === selectedCurrency)
-                    ? getConvertedAmount(exchangeRates.find(r => r.currency === selectedCurrency)!.rate)
-                    : '0.00'}
+                  {loading || convertedToCrc === null
+                    ? '—'
+                    : `₡${convertedToCrc.toLocaleString('es-CR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
                 </p>
               </div>
               <ArrowRightLeft className="w-6 h-6 text-teal-600" />
